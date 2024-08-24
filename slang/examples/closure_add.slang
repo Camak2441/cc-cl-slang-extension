@@ -6,4 +6,5 @@ let f(y : int) : int -> int =
 in 
   let add21 : int -> int  = f(21)  
   in let add17 : int -> int  = f(17) 
-     in add17(3) + add21(10) 
+     in 
+         add17(3) + add21(10) 
