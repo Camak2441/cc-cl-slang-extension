@@ -1,43 +1,50 @@
 
-type var = string
+type var = string 
 
-type oper = ADD | MUL | DIV | SUB | LT | AND | OR | EQB | EQI
+type oper = ADD | MUL | DIV | SUB | LT | AND | OR | EQB | EQI | CONS
 
-type unary_oper = NEG | NOT | READ
+type unary_oper = NEG | NOT | READ | HEAD | TAIL
 
-type expr =
-       | Unit
-       | Var of var
-       | Integer of int
-       | Boolean of bool
-       | UnaryOp of unary_oper * expr
-       | Op of expr * oper * expr
-       | If of expr * expr * expr
-       | Pair of expr * expr
-       | Fst of expr
-       | Snd of expr
-       | Inl of expr
-       | Inr of expr
-       | Case of expr * lambda * lambda
+type 'a expr =
+       | Unit of 'a
+       | Empty of 'a
+       | Var of 'a * var
+       | Integer of 'a * int
+       | Boolean of 'a * bool
+       | UnaryOp of 'a * unary_oper * 'a expr
+       | Op of 'a * 'a expr * oper * 'a expr
+       | If of 'a * 'a expr * 'a expr * 'a expr
+       | Pair of 'a * 'a expr * 'a expr
+       | Fst of 'a * 'a expr
+       | Snd of 'a * 'a expr
+       | Inl of 'a * 'a expr
+       | Inr of 'a * 'a expr
+       | Case of 'a * 'a expr * 'a lambda * 'a lambda
 
-       | While of expr * expr
-       | Seq of expr list
-       | Ref of expr
-       | Deref of expr
-       | Assign of expr * expr
+       | While of 'a * 'a expr * 'a expr
+       | Seq of 'a * 'a expr list
+       | Ref of 'a * 'a expr
+       | Deref of 'a * 'a expr
+       | Assign of 'a * 'a expr * 'a expr
 
-       | Lambda of lambda
-       | App of expr * expr
-       | LetFun of var * lambda * expr
-       | LetRecFun of var * lambda * expr
+       | Lambda of 'a lambda
+       | App of 'a * 'a expr * 'a expr
+       | LetFun of 'a * var * 'a lambda * 'a expr
+       | LetRecFun of 'a * var * 'a lambda * 'a expr
 
-and lambda = Past.var * expr
+       | Lazy of 'a * 'a expr
+       | Strict of 'a * 'a expr
+       | StrictThunk of 'a * 'a expr
 
-(* printing *)
-val string_of_unary_oper : unary_oper -> string
-val string_of_oper : oper -> string
-val string_of_uop : unary_oper -> string
-val string_of_bop : oper -> string
-val print_expr : expr -> unit
-val eprint_expr : expr -> unit
-val string_of_expr : expr -> string
+and 'a lambda = 'a * Past.var * 'a expr
+
+(* printing *) 
+val string_of_unary_oper : unary_oper -> string 
+val string_of_oper : oper -> string 
+val string_of_uop : unary_oper -> string 
+val string_of_bop : oper -> string 
+val print_expr : 'a expr -> unit
+val eprint_expr : 'a expr -> unit
+val string_of_expr : 'a expr -> string
+val map : ('a -> 'b) -> 'a expr -> 'b expr
+val get_tag : 'a expr -> 'a

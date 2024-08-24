@@ -15,13 +15,17 @@ type type_expr =
    | TEarrow of type_expr * type_expr
    | TEproduct of type_expr * type_expr
    | TEunion of type_expr * type_expr
+   | TEthunk of type_expr
+   | TElist of type_expr * bool
+   | TEempty
 
-type oper = ADD | MUL | DIV | SUB | LT | AND | OR | EQ | EQB | EQI
+type oper = ADD | MUL | DIV | SUB | LT | AND | OR | EQ | EQB | EQI | CONS
 
-type unary_oper = NEG | NOT 
+type unary_oper = NEG | NOT | HEAD | TAIL
 
 type expr = 
        | Unit of loc  
+       | Empty of loc
        | What of loc 
        | Var of loc * var
        | Integer of loc * int
@@ -42,16 +46,24 @@ type expr =
        | Deref of loc * expr 
        | Assign of loc * expr * expr
 
-       | Lambda of loc * lambda 
+       | Lambda of loc * lambda
+       | MultiLambda of loc * multiLambda
        | App of loc * expr * expr
        | Let of loc * var * type_expr * expr * expr
        | LetFun of loc * var * lambda * type_expr * expr
+       | LetMultiFun of loc * var * multiLambda * type_expr * expr
        | LetRecFun of loc * var * lambda * type_expr * expr
 
+       | Lazy of loc * expr
+       | Strict of loc * expr
+       | StrictThunk of loc * expr
+
+and multiLambda = (var * type_expr) list * expr
 and lambda = var * type_expr * expr 
 
 let  loc_of_expr = function 
     | Unit loc                      -> loc 
+    | Empty loc                     -> loc
     | What loc                      -> loc 
     | Var (loc, _)                  -> loc 
     | Integer (loc, _)              -> loc 
@@ -71,10 +83,15 @@ let  loc_of_expr = function
     | Assign(loc, _, _)             -> loc 
     | While(loc, _, _)              -> loc 
     | Lambda(loc, _)                -> loc 
+    | MultiLambda(loc, _)           -> loc 
     | App(loc, _, _)                -> loc 
     | Let(loc, _, _, _, _)          -> loc 
     | LetFun(loc, _, _, _, _)       -> loc 
+    | LetMultiFun(loc, _, _, _, _)  -> loc 
     | LetRecFun(loc, _, _, _, _)    -> loc 
+    | Lazy(loc, _)                  -> loc
+    | Strict(loc, _)                -> loc
+    | StrictThunk(loc, _)           -> loc
 
 
 let string_of_loc loc = 
@@ -93,14 +110,19 @@ let rec pp_type = function
   | TEint -> "int" 
   | TEbool -> "bool" 
   | TEunit -> "unit" 
+  | TEthunk t -> "(' " ^ pp_type t ^ ")"
+  | TElist (t, b) -> "(" ^ pp_type t ^ if b then " seq)" else " list)"
   | TEref t           -> "(" ^ (pp_type t) ^ " ref)"
   | TEarrow(t1, t2)   -> "(" ^ (pp_type t1) ^ " -> " ^ (pp_type t2) ^ ")" 
   | TEproduct(t1, t2) -> "(" ^ (pp_type t1) ^ " * " ^ (pp_type t2) ^ ")"  
   | TEunion(t1, t2)   -> "(" ^ (pp_type t1) ^ " + " ^ (pp_type t2) ^ ")"  
+  | TEempty           -> "('a List)"
 
 let pp_uop = function 
   | NEG -> "-" 
   | NOT -> "~" 
+  | HEAD -> ";:"
+  | TAIL -> ":;"
 
 
 let pp_bop = function 
@@ -114,11 +136,13 @@ let pp_bop = function
   | EQB   -> "eqb" 
   | AND   -> "&&" 
   | OR   -> "||" 
+  | CONS -> "[]"
 
 let string_of_oper = pp_bop 
 let string_of_unary_oper = pp_uop 
 
 let fstring ppf s = fprintf ppf "%s" s
+let pp_param_list ppf l = fstring ppf (List.fold_left (fun acc (x,t) -> acc ^ "(" ^ x ^ ":" ^ pp_type t ^ ")") "" l)
 let pp_type ppf t = fstring ppf (pp_type t) 
 let pp_unary ppf op = fstring ppf (pp_uop op) 
 let pp_binary ppf op = fstring ppf (pp_bop op) 
@@ -126,6 +150,7 @@ let pp_binary ppf op = fstring ppf (pp_bop op)
 (* ignore locations *) 
 let rec pp_expr ppf = function 
     | Unit _              -> fstring ppf "()" 
+    | Empty _             -> fstring ppf "[]"
     | What _              -> fstring ppf "?" 
     | Var (_, x)          -> fstring ppf x 
     | Integer (_, n)      -> fstring ppf (string_of_int n)
@@ -151,16 +176,24 @@ let rec pp_expr ppf = function
     | Deref(_, e)         -> fprintf ppf "!%a" pp_expr e
     | Assign(_, e1, e2)   -> fprintf ppf "(%a := %a)" pp_expr e1 pp_expr e2 
     | Lambda(_, (x, t, e)) -> 
-         fprintf ppf "(fun %a : %a -> %a)" fstring x pp_type t  pp_expr e
+         fprintf ppf "(fun %a : %a -> %a)" fstring x pp_type t pp_expr e
+    | MultiLambda(_, (l, e)) -> 
+         fprintf ppf "(fun %a -> %a)" pp_param_list l pp_expr e
     | App(_, e1, e2)      -> fprintf ppf "%a %a" pp_expr e1 pp_expr e2
     | Let(_, x, t, e1, e2) -> 
          fprintf ppf "@[<2>let %a : %a = %a in %a end@]" fstring x pp_type t pp_expr e1 pp_expr e2
     | LetFun(_, f, (x, t1, e1), t2, e2)     -> 
          fprintf ppf "@[let %a(%a : %a) : %a =@ %a @ in %a @ end@]" 
-                     fstring f fstring x  pp_type t1 pp_type t2 pp_expr e1 pp_expr e2
+                     fstring f fstring x pp_type t1 pp_type t2 pp_expr e1 pp_expr e2
+    | LetMultiFun(_, f, (l, e1), t2, e2)     -> 
+        fprintf ppf "@[let %a%a : %a =@ %a @ in %a @ end@]" 
+                    fstring f pp_param_list l pp_type t2 pp_expr e1 pp_expr e2
     | LetRecFun(_, f, (x, t1, e1), t2, e2)     -> 
          fprintf ppf "@[letrec %a(%a : %a) : %a =@ %a @ in %a @ end@]" 
                      fstring f fstring x  pp_type t1 pp_type t2 pp_expr e1 pp_expr e2
+    | Lazy(_, e) -> fprintf ppf "' (%a)" pp_expr e
+    | Strict(_, e) -> fprintf ppf "$! (%a)" pp_expr e
+    | StrictThunk(_, e) -> fprintf ppf "$!' (%a)" pp_expr e
 
 let print_expr e = 
     let _ = pp_expr std_formatter e
@@ -176,6 +209,8 @@ let eprint_expr e =
 let string_of_uop = function 
   | NEG -> "NEG" 
   | NOT -> "NOT" 
+  | HEAD -> ";:"
+  | TAIL -> ":;"
 
 let string_of_bop = function 
   | ADD -> "ADD" 
@@ -188,6 +223,7 @@ let string_of_bop = function
   | EQB   -> "EQB" 
   | AND   -> "AND" 
   | OR   -> "OR" 
+  | CONS -> "::"
 
 let mk_con con l = 
     let rec aux carry = function 
@@ -199,7 +235,10 @@ let mk_con con l =
 let rec string_of_type = function 
   | TEint             -> "TEint" 
   | TEbool            -> "TEbool" 
+  | TEempty           -> "TEempty"
   | TEunit            -> "TEunit" 
+  | TElist (t, b)     -> mk_con "TElist" [string_of_type t; string_of_bool b]
+  | TEthunk t         -> mk_con "TEthunk" [string_of_type t]
   | TEref t           -> mk_con "TEref" [string_of_type t] 
   | TEarrow(t1, t2)   -> mk_con "TEarrow" [string_of_type t1; string_of_type t2] 
   | TEproduct(t1, t2) -> mk_con "TEproduct" [string_of_type t1; string_of_type t2] 
@@ -207,6 +246,7 @@ let rec string_of_type = function
 
 let rec string_of_expr = function 
     | Unit _              -> "Unit" 
+    | Empty _             -> "Empty" 
     | What _              -> "What" 
     | Var (_, x)          -> mk_con "Var" [x] 
     | Integer (_, n)      -> mk_con "Integer" [string_of_int n] 
@@ -225,6 +265,7 @@ let rec string_of_expr = function
     | Deref(_, e)         -> mk_con "Deref" [string_of_expr e] 
     | Assign(_, e1, e2)   -> mk_con "Assign" [string_of_expr e1; string_of_expr e2]
     | Lambda(_, (x, t, e)) -> mk_con "Lambda" [x; string_of_type t; string_of_expr e]
+    | MultiLambda(_, (l, e)) -> mk_con "MultiLambda" ((List.map (fun (x, t) -> x ^ string_of_type t) l) @ [string_of_expr e])
     | App(_, e1, e2)      -> mk_con "App" [string_of_expr e1; string_of_expr e2]
     | Let(_, x, t, e1, e2) -> mk_con "Let" [x; string_of_type t; string_of_expr e1; string_of_expr e2]
     | LetFun(_, f, (x, t1, e1), t2, e2)      -> 
@@ -233,6 +274,12 @@ let rec string_of_expr = function
              mk_con "" [x; string_of_type t1; string_of_expr e1]; 
              string_of_type t2; 
              string_of_expr e2]
+    | LetMultiFun(_, f, (l, e1), t2, e2)      -> 
+          mk_con "LetMultiFun" [
+            f; 
+            mk_con "" (List.map (fun (x, t) -> x ^ string_of_type t) l); 
+            string_of_type t2; 
+            string_of_expr e2]
     | LetRecFun(_, f, (x, t1, e1), t2, e2)   -> 
           mk_con "LetRecFun" [
              f; 
@@ -244,6 +291,10 @@ let rec string_of_expr = function
 	     string_of_expr e; 
 	     mk_con "" [x1; string_of_type t1; string_of_expr e1]; 
 	     mk_con "" [x2; string_of_type t1; string_of_expr e2]]
+
+    | Lazy(_, e) -> mk_con "Lazy" [string_of_expr e]
+    | Strict(_, e) -> mk_con "Strict" [string_of_expr e]
+    | StrictThunk(_, e) -> mk_con "StrictThunk" [string_of_expr e]
 
 and string_of_expr_list = function 
   | [] -> "" 

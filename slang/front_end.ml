@@ -28,8 +28,8 @@ let parse (file, lexbuf) =
 
  (* perform static checks *) 
 let check (file, e) = 
-    let e', _ = try Static.infer [] e 
-                with Errors.Error s -> error file "static check" s 
+    let e' = try Static.check e 
+             with Errors.Error s -> error file "static check" s 
     in let _ = peek "After static checks" e' Past.string_of_expr 
     in e'
 

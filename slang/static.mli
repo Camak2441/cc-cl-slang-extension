@@ -1,5 +1,5 @@
-open Past
 
-type env = (var * type_expr) list
 
-val infer : env -> expr -> expr * type_expr
+val infer : (Past.var * Past.type_expr) list -> Past.expr -> (Past.expr * Past.type_expr) 
+
+val check : Past.expr -> Past.expr 

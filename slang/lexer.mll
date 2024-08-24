@@ -23,6 +23,7 @@ rule token = parse
   | "," { COMMA }
   | ":" { COLON }
   | ";" { SEMICOLON }
+  | "'" { APOSTROPHE } 
   | "+" { ADD }
   | "-" { SUB }
   | "*" { MUL }
@@ -37,7 +38,12 @@ rule token = parse
   | "->" { ARROW }
   | "?" { WHAT }
   | "!" { BANG }
+  | "$!" { DOUBLEBANG }
+  | "::" { CONS }
+  | "tl" { TAIL }
+  | "hd" { HEAD }
   | "()" { UNIT }
+  | "[]" { EMPTY }
   | "and" { AND }
   | "true" { TRUE }
   | "false" { FALSE }
@@ -61,6 +67,9 @@ rule token = parse
   | "bool" { BOOL }
   | "int" { INTTYPE }
   | "unit" { UNITTYPE }
+  | "list" { LISTTYPE }
+  | "seq" { SEQTYPE }
+  | "thunk" { THUNKTYPE }
   | int_reg_exp { INT (int_of_string (Lexing.lexeme lexbuf)) }
   | ident_reg_exp { IDENT (Lexing.lexeme lexbuf) }
   | "(*" { comment lexbuf; token lexbuf }
