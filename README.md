@@ -45,7 +45,7 @@ let n (x: int): int seq =
 in
 let sumfirst (x: int) (l: int seq): int = 
   if 0 < x then 
-    (;: l) + sumfirst (x - 1) (:; l)
+    (hd l) + sumfirst (x - 1) (tl l)
   else 0
 in
 let l : int seq = n 1 in begin
@@ -61,7 +61,7 @@ let n (x: int): int seq =
 in
 let sumfirst (x: int) (l: int seq thunk): int = 
   if 0 < x then 
-    (;: l) + sumfirst (x - 1) (:; l)
+    (hd l) + sumfirst (x - 1) (tl l)
   else 0
 in
 let l : int seq = n 1 in begin
